@@ -10,8 +10,8 @@ remove_cnt = 0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Delete pesky files from Mac OS: *._ and .DS_Store")
-    parser.add_argument('-d', '--directory', type=str, required=True, description="The directory to search through")
-    parser.add_argument('-x', '--execute', type=bool, action='store_true', default=False, description="If set, this won't be a dry run and the files will be unlinked permanently.")
+    parser.add_argument('-d', '--directory', type=str, required=True, help="The directory to search through")
+    parser.add_argument('-x', '--execute', action='store_true', default=False, help="If set, this won't be a dry run and the files will be unlinked permanently.")
     args = parser.parse_args()
 
     assert os.path.exists(args.directory)
