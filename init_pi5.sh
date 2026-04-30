@@ -183,19 +183,24 @@ gh_auth_status() {
 git_identity_apply() {
     as_user git config --global user.name "$GIT_USER_NAME"
     as_user git config --global user.email "$GIT_USER_EMAIL"
+    as_user git config --global pull.rebase true
     echo "set git user.name='$GIT_USER_NAME', user.email='$GIT_USER_EMAIL'"
+    echo "set pull.rebase=$(as_user git config --global --get pull.rebase)"
 }
 
 git_identity_status() {
-    local cur_name cur_email
+    local cur_name cur_email cur_rebase
     cur_name=$(as_user git config --global user.name 2>/dev/null || true)
     cur_email=$(as_user git config --global user.email 2>/dev/null || true)
-    if [[ "$cur_name" == "$GIT_USER_NAME" && "$cur_email" == "$GIT_USER_EMAIL" ]]; then
+    cur_rebase=$(as_user git config --global --get pull.rebase 2>/dev/null || true)
+    if [[ "$cur_name" == "$GIT_USER_NAME" \
+        && "$cur_email" == "$GIT_USER_EMAIL" \
+        && "$cur_rebase" == "true" ]]; then
         echo "ok"
-    elif [[ -z "$cur_name" && -z "$cur_email" ]]; then
+    elif [[ -z "$cur_name" && -z "$cur_email" && -z "$cur_rebase" ]]; then
         echo "missing"
     else
-        echo "partial: name='$cur_name' email='$cur_email'"
+        echo "partial: name='$cur_name' email='$cur_email' pull.rebase='$cur_rebase'"
     fi
 }
 
@@ -276,7 +281,7 @@ ITEMS=(
     "power_button|Power button -> shutdown (double-press on this OS)"
     "packages|Install base packages (${PACKAGES[*]})"
     "gh_auth|gh auth login + set as git credential helper"
-    "git_identity|Set git user.name and user.email"
+    "git_identity|Set git user.name, user.email, pull.rebase"
     "vimrc|Install .vimrc from this repo into ~"
     "bash_aliases|Append shell aliases to ~/.bashrc"
 )
