@@ -55,6 +55,12 @@ Host r16l
     Port 2222
     User nkrueger
     ProxyCommand $PROXY
+
+# Catch-all: ANY tool dialing r16's WSL sshd by raw IP:2222 (publish.sh, rsync,
+# scripts with hardcoded addresses) gets the same self-waking proxy. Port-22
+# traffic is untouched (also keeps the proxy's own wake call from recursing).
+Match host $R16_IP exec "test %p = 2222"
+    ProxyCommand $PROXY
 CONFIG_EOF
     echo "appended r16/r16l entries to $CONFIG"
 else
