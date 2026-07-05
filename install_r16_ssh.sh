@@ -22,19 +22,42 @@ mkdir -p "$SSH_DIR" && chmod 700 "$SSH_DIR"
 
 # --- self-waking proxy script ---------------------------------------------
 cat > "$PROXY" <<'PROXY_EOF'
-#!/bin/bash
 # Self-waking proxy for r16l (WSL sshd on the r16 Windows box).
 # If the WSL VM is asleep (2222 not answering with an SSH banner), a port-22
 # login boots it (DefaultShell=wsl.exe) and sshd auto-starts with it. The wake
 # session is held open in the background so the VM survives until the real
 # connection is established.
 H=192.168.1.89
-probe() { timeout 3 bash -c "exec 3<>/dev/tcp/$H/2222 && head -c4 <&3" 2>/dev/null | grep -q 'SSH-'; }
+P=2222
+probe() { timeout 3 bash -c "exec 3<>/dev/tcp/$H/$P && head -c4 <&3" 2>/dev/null | grep -q 'SSH-'; }
 if ! probe; then
     ( sleep 45 | timeout 50 ssh -tt -o BatchMode=yes -o ConnectTimeout=5 natek@$H >/dev/null 2>&1 & )
     for i in $(seq 1 15); do probe && break; sleep 2; done
 fi
-exec nc "$H" 2222
+# TCP relay: prefer nc, fall back to python3 (not every host has nc)
+if command -v nc >/dev/null 2>&1; then
+    exec nc "$H" "$P"
+fi
+exec python3 -c '
+import os, select, socket, sys
+h, p = sys.argv[1], int(sys.argv[2])
+s = socket.create_connection((h, p))
+fds = [s.fileno(), 0]
+while True:
+    r, _, _ = select.select(fds, [], [])
+    if s.fileno() in r:
+        d = s.recv(65536)
+        if not d:
+            break
+        os.write(1, d)
+    if 0 in r:
+        d = os.read(0, 65536)
+        if not d:
+            s.shutdown(socket.SHUT_WR)
+            fds.remove(0)
+            continue
+        s.sendall(d)
+' "$H" "$P"
 PROXY_EOF
 chmod +x "$PROXY"
 echo "installed $PROXY"
