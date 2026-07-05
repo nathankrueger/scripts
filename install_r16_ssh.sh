@@ -22,6 +22,7 @@ mkdir -p "$SSH_DIR" && chmod 700 "$SSH_DIR"
 
 # --- self-waking proxy script ---------------------------------------------
 cat > "$PROXY" <<'PROXY_EOF'
+#!/bin/bash
 # Self-waking proxy for r16l (WSL sshd on the r16 Windows box).
 # If the WSL VM is asleep (2222 not answering with an SSH banner), a port-22
 # login boots it (DefaultShell=wsl.exe) and sshd auto-starts with it. The wake
