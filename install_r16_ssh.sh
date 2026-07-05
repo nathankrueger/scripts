@@ -33,7 +33,19 @@ cat > "$PROXY" <<'PROXY_EOF'
 # by PID when the relay exits (EOF alone doesn't close a -tt session).
 H=192.168.1.89
 P=2222
-probe() { timeout 3 bash -c "exec 3<>/dev/tcp/$H/$P && head -c4 <&3" 2>/dev/null | grep -q 'SSH-'; }
+# pure-python3 probe: stock macOS lacks GNU `timeout`, and bash /dev/tcp
+# can't put a deadline on the banner read
+probe() {
+    python3 -c '
+import socket, sys
+try:
+    s = socket.create_connection(("'"$H"'", '"$P"'), 3)
+    s.settimeout(3)
+    sys.exit(0 if s.recv(4).startswith(b"SSH-") else 1)
+except Exception:
+    sys.exit(1)
+'
+}
 
 ( while kill -0 $$ 2>/dev/null; do sleep 10; done ) 2>/dev/null | \
     ssh -tt -o BatchMode=yes -o ConnectTimeout=5 "natek@$H" >/dev/null 2>&1 &
