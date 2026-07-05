@@ -29,19 +29,20 @@ cat > "$PROXY" <<'PROXY_EOF'
 # connections through the WSL-internal sshd do NOT count as activity. So this
 # proxy keeps an "anchor" port-22 session (a Windows-side wsl.exe process)
 # open for the ENTIRE life of the relayed connection — waking the VM if
-# needed and preventing idle-kill mid-transfer (long rsyncs died without it).
-# The anchor's stdin is fed by a loop that watches this process; when the
-# relay exits (even SIGKILL), the loop ends, the anchor gets EOF and closes.
+# needed and preventing idle-kill mid-transfer. A watcher kills the anchor
+# by PID when the relay exits (EOF alone doesn't close a -tt session).
 H=192.168.1.89
 P=2222
 probe() { timeout 3 bash -c "exec 3<>/dev/tcp/$H/$P && head -c4 <&3" 2>/dev/null | grep -q 'SSH-'; }
 
-( while kill -0 $$ 2>/dev/null; do sleep 10; done ) | \
-    ssh -tt -o BatchMode=yes -o ConnectTimeout=5 natek@$H >/dev/null 2>&1 &
+( while kill -0 $$ 2>/dev/null; do sleep 10; done ) 2>/dev/null | \
+    ssh -tt -o BatchMode=yes -o ConnectTimeout=5 "natek@$H" >/dev/null 2>&1 &
+ANCHOR=$!
+( while kill -0 $$ 2>/dev/null; do sleep 10; done; sleep 15; kill "$ANCHOR" 2>/dev/null ) >/dev/null 2>&1 &
 
 for i in $(seq 1 20); do probe && break; sleep 2; done
 
-# exec keeps our PID alive as the relay, so the anchor watches the relay itself
+# exec keeps our PID as the relay's, so the watcher tracks the relay itself
 if command -v nc >/dev/null 2>&1; then
     exec nc "$H" "$P"
 fi
