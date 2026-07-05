@@ -23,19 +23,25 @@ mkdir -p "$SSH_DIR" && chmod 700 "$SSH_DIR"
 # --- self-waking proxy script ---------------------------------------------
 cat > "$PROXY" <<'PROXY_EOF'
 #!/bin/bash
-# Self-waking proxy for r16l (WSL sshd on the r16 Windows box).
-# If the WSL VM is asleep (2222 not answering with an SSH banner), a port-22
-# login boots it (DefaultShell=wsl.exe) and sshd auto-starts with it. The wake
-# session is held open in the background so the VM survives until the real
-# connection is established.
+# Self-waking, self-holding proxy for r16l (WSL sshd on the r16 Windows box).
+#
+# WSL2 idle-kills the VM ~60s after the last Windows-side session ends, and
+# connections through the WSL-internal sshd do NOT count as activity. So this
+# proxy keeps an "anchor" port-22 session (a Windows-side wsl.exe process)
+# open for the ENTIRE life of the relayed connection — waking the VM if
+# needed and preventing idle-kill mid-transfer (long rsyncs died without it).
+# The anchor's stdin is fed by a loop that watches this process; when the
+# relay exits (even SIGKILL), the loop ends, the anchor gets EOF and closes.
 H=192.168.1.89
 P=2222
 probe() { timeout 3 bash -c "exec 3<>/dev/tcp/$H/$P && head -c4 <&3" 2>/dev/null | grep -q 'SSH-'; }
-if ! probe; then
-    ( sleep 45 | timeout 50 ssh -tt -o BatchMode=yes -o ConnectTimeout=5 natek@$H >/dev/null 2>&1 & )
-    for i in $(seq 1 15); do probe && break; sleep 2; done
-fi
-# TCP relay: prefer nc, fall back to python3 (not every host has nc)
+
+( while kill -0 $$ 2>/dev/null; do sleep 10; done ) | \
+    ssh -tt -o BatchMode=yes -o ConnectTimeout=5 natek@$H >/dev/null 2>&1 &
+
+for i in $(seq 1 20); do probe && break; sleep 2; done
+
+# exec keeps our PID alive as the relay, so the anchor watches the relay itself
 if command -v nc >/dev/null 2>&1; then
     exec nc "$H" "$P"
 fi
